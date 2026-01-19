@@ -13,7 +13,8 @@ export default function Summarize() {
       >
         <div className="flex-1 min-h-[500px]">
           <ChatInterface 
-            welcomeMessage="Paste any text and I'll summarize it for you! I can:\n\n• Create concise bullet points from long passages\n• Extract key concepts and main ideas\n• Highlight important definitions and terms\n• Simplify complex explanations\n\nJust paste the text you want summarized!"
+            module="summarize"
+            welcomeMessage="Paste any text and I'll create a clear, organized summary for you! I'll extract the key points, main ideas, and important terms - perfect for quick revision before exams. Just paste what you need summarized!"
             placeholder="Paste text here to get a summary..."
           />
         </div>

@@ -13,8 +13,9 @@ export default function ExamPrep() {
       >
         <div className="flex-1 min-h-[500px]">
           <ChatInterface 
-            welcomeMessage="Welcome to Exam Prep! I can help you prepare for your exams by:\n\n• Generating mock test papers for your subjects\n• Creating practice questions by topic\n• Explaining important concepts likely to appear in exams\n• Providing time management strategies\n\nTell me which subject and topic you want to focus on!"
-            placeholder="e.g., Generate 10 MCQs on Photosynthesis for Class 9..."
+            module="exam-prep"
+            welcomeMessage="Welcome to Exam Prep! I can help you ace your exams by generating practice questions, mock papers, and explaining key concepts. Tell me which subject and topic you want to focus on, and I'll create exam-style questions tailored to your class level!"
+            placeholder="e.g., Generate 10 MCQs on Photosynthesis..."
           />
         </div>
       </ModuleCard>

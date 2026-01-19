@@ -13,7 +13,8 @@ export default function AIAssistant() {
       >
         <div className="flex-1 min-h-[500px]">
           <ChatInterface 
-            welcomeMessage="Hello! I'm your AI Study Assistant for Punjab College. I'm aware of your class level and subject, so I'll tailor my explanations accordingly. Ask me anything about your studies, upload an image for analysis, or let me help you understand complex topics!"
+            module="general"
+            welcomeMessage="Hello! I'm your AI Study Assistant for Punjab College. I know your class level and subject, so I'll tailor my explanations just for you. Ask me anything - from solving problems to explaining concepts. You can even upload images of questions for me to analyze!"
             placeholder="Ask me anything about your studies..."
           />
         </div>
