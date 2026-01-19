@@ -1,37 +1,68 @@
+// src/components/Logo.tsx
+
 interface LogoProps {
-  size?: 'sm' | 'md' | 'lg';
+  size?: "sm" | "md" | "lg";
   showSubtitle?: boolean;
+  showText?: boolean;
 }
 
-export function Logo({ size = 'md', showSubtitle = true }: LogoProps) {
+export function Logo({
+  size = "md",
+  showSubtitle = true,
+  showText = true,
+}: LogoProps) {
   const sizes = {
-    sm: { img: 28, title: 'text-lg', subtitle: 'text-xs' },
-    md: { img: 36, title: 'text-xl', subtitle: 'text-sm' },
-    lg: { img: 52, title: 'text-3xl', subtitle: 'text-base' },
-  };
+    sm: {
+      box: "h-10 w-10",
+      title: "text-lg",
+      subtitle: "text-xs",
+      gap: "gap-2",
+    },
+    md: {
+      box: "h-12 w-12",
+      title: "text-xl",
+      subtitle: "text-sm",
+      gap: "gap-3",
+    },
+    lg: {
+      box: "h-16 w-16",
+      title: "text-3xl",
+      subtitle: "text-base",
+      gap: "gap-4",
+    },
+  } as const;
 
-  const { img, title, subtitle } = sizes[size];
+  const { box, title, subtitle, gap } = sizes[size];
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="bg-white/90 dark:bg-white p-2 rounded-xl shadow-glow">
+    <div className={`flex items-center ${gap}`}>
+      {/* Logo Container (FULL VIEW, NO CROP) */}
+      <div
+        className={`rounded-2xl bg-white/90 dark:bg-white shadow-glow p-2 flex items-center justify-center ${box}`}
+      >
         <img
           src="/logo.png"
           alt="Punjab College Logo"
-          width={img}
-          height={img}
-          className="object-contain"
+          className="h-full w-full object-contain select-none"
+          draggable={false}
+          loading="eager"
         />
       </div>
 
-      <div className="flex flex-col">
-        <span className={`font-bold gradient-text ${title}`}>Punjab College</span>
-        {showSubtitle && (
-          <span className={`text-muted-foreground ${subtitle}`}>
-            Daroghawala Campus
+      {/* Brand Text */}
+      {showText && (
+        <div className="flex flex-col leading-tight">
+          <span className={`font-bold gradient-text ${title}`}>
+            Punjab College
           </span>
-        )}
-      </div>
+
+          {showSubtitle && (
+            <span className={`text-muted-foreground ${subtitle}`}>
+              Daroghawala Campus
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
