@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, StudentProfile, TeacherProfile } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Image, Loader2, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Image, Loader2, Bot, User, Sparkles, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -14,13 +14,15 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  systemPrompt?: string;
+  module?: string;
   placeholder?: string;
   welcomeMessage?: string;
 }
 
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
+
 export function ChatInterface({ 
-  systemPrompt, 
+  module = 'general',
   placeholder = "Ask me anything about your studies...",
   welcomeMessage = "Hello! I'm your AI Study Assistant. How can I help you today?"
 }: ChatInterfaceProps) {
@@ -42,16 +44,27 @@ export function ChatInterface({
     scrollToBottom();
   }, [messages]);
 
-  const getContextInfo = () => {
-    if (!user) return '';
+  const getUserProfile = () => {
+    if (!user) return null;
+    
     if (user.role === 'student') {
-      return `The student is in Class ${user.class}, studying ${user.subject}. Their name is ${user.name} and they are ${user.age} years old. Adjust your explanations to be ${
-        user.class === '9' || user.class === '10' ? 'simple and foundational' :
-        user.class === '11' || user.class === '12' ? 'intermediate with more depth' :
-        'advanced and comprehensive for ADP level'
-      }.`;
+      const studentUser = user as StudentProfile;
+      return {
+        role: 'student' as const,
+        name: studentUser.name,
+        class: studentUser.class,
+        subject: studentUser.subject,
+        age: studentUser.age,
+      };
+    } else {
+      const teacherUser = user as TeacherProfile;
+      return {
+        role: 'teacher' as const,
+        name: teacherUser.name,
+        subject: teacherUser.subject,
+        targetClass: teacherUser.targetClass,
+      };
     }
-    return `The user is a teacher named ${user.name}, teaching ${user.subject} to Class ${user.targetClass} students.`;
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,25 +93,136 @@ export function ChatInterface({
       image: selectedImage || undefined,
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setSelectedImage(null);
     setIsLoading(true);
 
-    // Simulate AI response (replace with actual API call when Cloud is enabled)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Prepare messages for API (exclude welcome message, only include conversation)
+      const apiMessages = newMessages
+        .filter(m => m.id !== '1') // Exclude initial welcome message
+        .map(m => ({
+          role: m.role,
+          content: m.content,
+          image: m.image,
+        }));
 
-    const contextInfo = getContextInfo();
-    const aiResponse = generateMockResponse(input, contextInfo, !!selectedImage);
+      const response = await fetch(CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          userProfile: getUserProfile(),
+          module,
+        }),
+      });
 
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: aiResponse,
-    };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        if (response.status === 429) {
+          toast.error('Rate limit reached. Please wait a moment and try again.');
+        } else if (response.status === 402) {
+          toast.error('AI credits exhausted. Please add credits to continue.');
+        } else {
+          toast.error(errorData.error || 'Failed to get AI response');
+        }
+        setIsLoading(false);
+        return;
+      }
 
-    setMessages(prev => [...prev, assistantMessage]);
-    setIsLoading(false);
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let assistantContent = '';
+      let assistantMessageId = (Date.now() + 1).toString();
+
+      // Add empty assistant message
+      setMessages(prev => [...prev, { id: assistantMessageId, role: 'assistant', content: '' }]);
+
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete lines
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => 
+                prev.map(m => 
+                  m.id === assistantMessageId 
+                    ? { ...m, content: assistantContent }
+                    : m
+                )
+              );
+            }
+          } catch {
+            // Incomplete JSON, will be handled in next chunk
+            buffer = line + '\n' + buffer;
+            break;
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        for (let raw of buffer.split('\n')) {
+          if (!raw) continue;
+          if (raw.endsWith('\r')) raw = raw.slice(0, -1);
+          if (raw.startsWith(':') || raw.trim() === '') continue;
+          if (!raw.startsWith('data: ')) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              assistantContent += content;
+              setMessages(prev => 
+                prev.map(m => 
+                  m.id === assistantMessageId 
+                    ? { ...m, content: assistantContent }
+                    : m
+                )
+              );
+            }
+          } catch { /* ignore */ }
+        }
+      }
+
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast.error('Failed to connect to AI service. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -141,7 +265,7 @@ export function ChatInterface({
             </div>
           </div>
         ))}
-        {isLoading && (
+        {isLoading && messages[messages.length - 1]?.role === 'user' && (
           <div className="flex gap-3 animate-slide-up">
             <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
               <Bot className="w-5 h-5 text-secondary-foreground" />
@@ -188,6 +312,7 @@ export function ChatInterface({
             size="icon"
             onClick={() => fileInputRef.current?.click()}
             className="shrink-0"
+            disabled={isLoading}
           >
             <Image className="w-5 h-5" />
           </Button>
@@ -197,6 +322,7 @@ export function ChatInterface({
               onChange={(e) => setInput(e.target.value)}
               placeholder={placeholder}
               className="min-h-[48px] max-h-32 resize-none pr-12"
+              disabled={isLoading}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -216,31 +342,9 @@ export function ChatInterface({
         </form>
         <p className="text-xs text-muted-foreground mt-2 text-center flex items-center justify-center gap-1">
           <Sparkles className="w-3 h-3" />
-          AI responses are context-aware based on your profile
+          AI responses are personalized to your class level and subject
         </p>
       </div>
     </div>
   );
-}
-
-function generateMockResponse(input: string, context: string, hasImage: boolean): string {
-  const lowerInput = input.toLowerCase();
-  
-  if (hasImage) {
-    return "I can see the image you've uploaded. To provide accurate analysis and help, please connect Lovable Cloud to enable AI vision capabilities. Once connected, I'll be able to analyze diagrams, solve problems from photos, and much more!";
-  }
-
-  if (lowerInput.includes('photosynthesis')) {
-    return "Photosynthesis is the process by which plants convert light energy into chemical energy.\n\nThe basic equation is:\n6CO2 + 6H2O + Light Energy → C6H12O6 + 6O2\n\nKey stages include:\n1. Light-dependent reactions (in thylakoids)\n2. Light-independent reactions/Calvin Cycle (in stroma)\n\nWould you like me to explain any specific part in more detail?";
-  }
-
-  if (lowerInput.includes('newton') || lowerInput.includes('laws of motion')) {
-    return "Newton's Three Laws of Motion form the foundation of classical mechanics:\n\n1. First Law (Inertia): An object at rest stays at rest, and an object in motion stays in motion unless acted upon by an external force.\n\n2. Second Law: F = ma (Force equals mass times acceleration)\n\n3. Third Law: For every action, there is an equal and opposite reaction.\n\nShall I provide examples or practice problems for any of these laws?";
-  }
-
-  if (lowerInput.includes('quadratic')) {
-    return "The quadratic formula is used to solve equations of the form ax² + bx + c = 0:\n\nx = (-b ± √(b² - 4ac)) / 2a\n\nThe discriminant (b² - 4ac) tells us about the nature of roots:\n- If positive: Two distinct real roots\n- If zero: One repeated real root\n- If negative: Two complex roots\n\nWould you like me to solve a specific quadratic equation?";
-  }
-
-  return "I'm here to help with your studies! To provide accurate, AI-powered responses, please connect Lovable Cloud. This will enable:\n\n• Context-aware answers based on your class level\n• Image analysis for solving visual problems\n• Personalized learning recommendations\n• Advanced exam preparation\n\nIn the meantime, feel free to ask me about any topic and I'll do my best to help!";
 }

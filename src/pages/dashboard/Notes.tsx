@@ -13,7 +13,8 @@ export default function Notes() {
       >
         <div className="flex-1 min-h-[500px]">
           <ChatInterface 
-            welcomeMessage="Welcome to Curated Notes! Ask me for comprehensive notes on any topic. I'll provide:\n\n• High-yield study material tailored to your level\n• Key concepts and definitions\n• Important formulas and equations\n• Diagrams descriptions and explanations\n• Exam-focused content\n\nWhat topic would you like notes on?"
+            module="notes"
+            welcomeMessage="Welcome to Curated Notes! Ask me for comprehensive, well-organized notes on any topic. I'll provide key concepts, definitions, formulas, examples, and exam tips - all tailored to your class level. What topic would you like notes on?"
             placeholder="e.g., Give me comprehensive notes on Cell Division..."
           />
         </div>
