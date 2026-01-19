@@ -19,7 +19,7 @@ export function Logo({ size = "md", showSubtitle = true }: LogoProps) {
       {/* Logo Image */}
       <div className="bg-white/90 dark:bg-white p-2 rounded-xl shadow-glow">
         <img
-          src="/logo.png"
+          src="/pgc.png"
           alt="Punjab College Logo"
           width={img}
           height={img}
